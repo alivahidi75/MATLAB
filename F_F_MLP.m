@@ -1,0 +1,118 @@
+clc;
+clear;
+close all;
+
+%% Load Data
+
+Data=load('New_Pv_Data');
+Data=Data.New_PV_Data;
+
+InputsUN=Data(:,2:end)';
+
+targets=Data(:,1)';
+targets=full(ind2vec(targets));
+inputs=InputsUN;
+
+%% Create and train Network
+
+hiddenLayerSize = 15;
+TF={'tansig','purelin'};
+net = newff(inputs,targets,hiddenLayerSize,TF);
+
+% Choose Input and Output Pre/Post-Processing Functions
+% For a list of all processing functions type: help nnprocess
+
+net.inputs{1}.processFcns = {'removeconstantrows','mapminmax'};
+net.outputs{2}.processFcns = {'removeconstantrows','mapminmax'};
+
+
+% Setup Division of Data for Training, Validation, Testing
+% For a list of all data division functions type: help nndivide
+
+net.divideFcn = 'dividerand';  % Divide data randomly
+net.divideMode = 'sample';  % Divide up every sample
+net.divideParam.trainRatio = 70/100;
+net.divideParam.valRatio = 15/100;
+net.divideParam.testRatio = 15/100;
+
+% For help on training function 'trainlm' type: help trainlm
+% For a list of all training functions type: help nntrain
+
+net.trainFcn = 'trainlm';  % Levenberg-Marquardt
+
+% Choose a Performance Function
+% For a list of all performance functions type: help nnperformance
+net.performFcn = 'mse';  % Mean squared error
+
+% Choose Plot Functions
+% For a list of all plot functions type: help nnplot
+
+net.plotFcns = {'plotperform','ploterrhist','plotregression','plotfit'};
+net.trainParam.showWindow=true;
+net.trainParam.showCommandLine=false;
+net.trainParam.show=1;
+net.trainParam.epochs=600;
+net.trainParam.goal=1e-8;
+net.trainParam.max_fail=20;
+% set same weights 
+RandStream.setGlobalStream (RandStream ('mrg32k3a','Seed', 1234));
+
+
+% Train the Network
+[net,tr] = train(net,inputs,targets);
+
+% Test the Network
+outputs = net(inputs);
+errors = gsubtract(targets,outputs);
+performance = perform(net,targets,outputs);
+
+%% Recalculate Training, Validation and Test Performance
+
+trainInd=tr.trainInd;
+trainInputs = inputs(:,trainInd);
+trainTargets = targets(:,trainInd);
+trainOutputs = outputs(:,trainInd);
+trainErrors = trainTargets-trainOutputs;
+trainPerformance = perform(net,trainTargets,trainOutputs);
+
+valInd=tr.valInd;
+valInputs = inputs(:,valInd);
+valTargets = targets(:,valInd);
+valOutputs = outputs(:,valInd);
+valErrors = valTargets-valOutputs;
+valPerformance = perform(net,valTargets,valOutputs);
+
+testInd=tr.testInd;
+testInputs = inputs(:,testInd);
+testTargets = targets(:,testInd);
+testOutputs = outputs(:,testInd);
+testError = testTargets-testOutputs;
+testPerformance = perform(net,testTargets,testOutputs);
+
+%% Results Plots
+% view(net)
+% PlotResults(targets,outputs,'all dadta');
+% PlotResults(trainTargets,trainOutputs,'train dadta');
+% PlotResults(valTargets,valOutputs,'validiation dadta');
+% PlotResults(testTargets,testOutputs,'tets dadta');
+
+%% confusion matrix
+% figure;
+% plotconfusion(trainTargets,trainOutputs,'train dadta')
+% figure;
+% plotconfusion(valTargets,valOutputs,'validiation dadta')
+% figure;
+% plotconfusion(testTargets,testOutputs,'tets dadta')
+% figure;
+% plotconfusion(targets,outputs,'all dadta');
+          
+Targets=vec2ind(targets);
+Outputs=vec2ind(outputs);
+
+cm=confusionmat(Targets,Outputs);
+CCRtr=sum(diag(cm))/(sum(sum(cm)))*100;
+
+figure;
+cm1 = confusionchart(Targets,Outputs);
+MSE=mse(Targets,Outputs);
+
